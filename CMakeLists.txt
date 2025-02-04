@@ -27,7 +27,6 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(tree-sitter-c)
 
-add_executable(cityc src/main.cpp
-        test/basic.c)
+add_executable(cityc src/main.cpp)
 target_link_libraries(cityc PUBLIC city tree-sitter tree-sitter-c)
 target_include_directories(cityc PRIVATE ${tree-sitter_SOURCE_DIR}/lib/include)
