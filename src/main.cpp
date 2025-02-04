@@ -69,11 +69,37 @@ class Compiler
         }
     }
 
+    city::Value *ProcessBinaryExpression(CompilationContext &ctx, TSNode node)
+    {
+        city::Value *lhs = this->ProcessValue(ctx, ts_node_child_by_field_name(node, "left", 4));
+        city::Value *rhs = this->ProcessValue(ctx, ts_node_child_by_field_name(node, "right", 5));
+        auto op = this->GetNodeRawValue(ctx, ts_node_child_by_field_name(node, "operator", 8));
+
+        if (op == "+")
+        {
+            auto addtmp = ctx.builder.InsertAddInst(lhs, rhs);
+            return addtmp->GetReturnValue();
+        }
+
+        if (op == "-")
+        {
+            auto subtmp = ctx.builder.InsertSubInst(lhs, rhs);
+            return subtmp->GetReturnValue();
+        }
+
+        throw std::runtime_error("unrecognized operator");
+    }
+
     city::Value *ProcessValue(CompilationContext &ctx, TSNode node)
     {
         if (std::strcmp(ts_node_type(node), "number_literal") == 0)
         {
             return this->ProcessNumberLiteral(ctx, node);
+        }
+
+        if (std::strcmp(ts_node_type(node), "binary_expression") == 0)
+        {
+            return this->ProcessBinaryExpression(ctx, node);
         }
 
         throw std::runtime_error("unsupported value type");
