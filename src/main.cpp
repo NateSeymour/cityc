@@ -191,11 +191,10 @@ int main(int argc, char *argv[])
     }
 
     auto assembly = compiler.Compile();
-    auto entry = assembly["__entry"].ToPointer<double()>();
+    auto entry = assembly["__entry"].ToPointer<int()>();
 
-    double return_value = entry();
-
-    std::cout << "Program returned: " << return_value << std::endl;
+    int retval = entry();
+    std::cout << "Program returned: " << retval << std::endl;
 
     return 0;
 }

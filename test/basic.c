@@ -1,4 +1,4 @@
-double __entry()
+int __entry()
 {
-    return 3.1415;
+    return 0;
 }
