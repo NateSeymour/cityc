@@ -5,12 +5,16 @@
 #include <iostream>
 #include <sstream>
 #include <tree_sitter/api.h>
+#include <unordered_map>
 
 extern "C" TSLanguage const *tree_sitter_c();
 
 struct CompilationContext
 {
+    std::string_view source;
     city::IRBuilder &builder;
+
+    std::unordered_map<std::string, city::IRFunction *> functions;
 };
 
 class Compiler
@@ -26,14 +30,24 @@ class Compiler
         }
     }
 
+    std::string_view GetNodeRawValue(CompilationContext &ctx, TSNode node)
+    {
+        auto begin = ts_node_start_byte(node);
+        auto end = ts_node_end_byte(node);
+
+        return ctx.source.substr(begin, end - begin);
+    }
+
     city::Type ProcessPrimitiveType(CompilationContext &ctx, TSNode node)
     {
-        if (std::strcmp(ts_node_string(node), "double") == 0)
+        auto raw_value = this->GetNodeRawValue(ctx, node);
+
+        if (raw_value == "double")
         {
             return ctx.builder.GetType<double>();
         }
 
-        if (std::strcmp(ts_node_string(node), "int") == 0)
+        if (raw_value == "int")
         {
             return ctx.builder.GetType<int>();
         }
@@ -41,11 +55,72 @@ class Compiler
         throw std::runtime_error("unknown type name");
     }
 
-    void ProcessFunctionBody(CompilationContext &ctx, TSNode node) {}
+    city::Value *ProcessNumberLiteral(CompilationContext &ctx, TSNode node, std::optional<city::Type> hint = std::nullopt)
+    {
+        auto raw_value = this->GetNodeRawValue(ctx, node);
+
+        if (raw_value.contains('.'))
+        {
+            return ctx.builder.CreateConstant(std::stod(std::string(raw_value)));
+        }
+        else
+        {
+            return ctx.builder.CreateConstant(std::stoi(std::string(raw_value)));
+        }
+    }
+
+    city::Value *ProcessValue(CompilationContext &ctx, TSNode node)
+    {
+        if (std::strcmp(ts_node_type(node), "number_literal") == 0)
+        {
+            return this->ProcessNumberLiteral(ctx, node);
+        }
+
+        throw std::runtime_error("unsupported value type");
+    }
+
+    void ProcessReturnStatement(CompilationContext &ctx, TSNode node)
+    {
+        if (ts_node_named_child_count(node) == 0)
+        {
+            ctx.builder.InsertRetInst();
+        }
+        else
+        {
+            city::Value *return_value = this->ProcessValue(ctx, ts_node_named_child(node, 0));
+            ctx.builder.InsertRetInst(return_value);
+        }
+    }
+
+    void ProcessCompoundStatement(CompilationContext &ctx, TSNode node)
+    {
+        for (int i = 0; i < ts_node_named_child_count(node); i++)
+        {
+            TSNode child = ts_node_named_child(node, i);
+            if (std::strcmp(ts_node_type(child), "return_statement") == 0)
+            {
+                this->ProcessReturnStatement(ctx, child);
+            }
+        }
+    }
 
     void ProcessFunctionDefinition(CompilationContext &ctx, TSNode node)
     {
+        // Type
         auto return_type = this->ProcessPrimitiveType(ctx, ts_node_child_by_field_name(node, "type", 5));
+
+        // Function name and parameters
+        TSNode declarator_node = ts_node_child_by_field_name(node, "declarator", 10);
+        TSNode name_node = ts_node_child_by_field_name(declarator_node, "declarator", 10);
+        auto function_name = std::string(this->GetNodeRawValue(ctx, name_node));
+
+        // TODO: parse parameters
+
+        auto function = ctx.builder.CreateFunction(function_name, return_type);
+        ctx.functions[function_name] = function;
+
+        TSNode body = ts_node_child_by_field_name(node, "body", 4);
+        this->ProcessCompoundStatement(ctx, body);
     }
 
     void ProcessTranslationUnit(CompilationContext &ctx, TSNode node)
@@ -75,6 +150,7 @@ public:
         auto builder = module.CreateBuilder();
 
         CompilationContext ctx{
+                .source = text,
                 .builder = builder,
         };
         this->ProcessTranslationUnit(ctx, root);
@@ -114,12 +190,12 @@ int main(int argc, char *argv[])
         compiler.InsertCSource(path.filename().string(), text);
     }
 
-    // Compile and run
-    /*
     auto assembly = compiler.Compile();
     auto entry = assembly["__entry"].ToPointer<double()>();
-    entry();
-    */
+
+    double return_value = entry();
+
+    std::cout << "Program returned: " << return_value << std::endl;
 
     return 0;
 }

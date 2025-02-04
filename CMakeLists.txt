@@ -8,14 +8,14 @@ include(FetchContent)
 FetchContent_Declare(
         city
         GIT_REPOSITORY https://github.com/NateSeymour/city.git
-        GIT_TAG v0.0.5
+        GIT_TAG v0.0.8
 )
 FetchContent_MakeAvailable(city)
 
 FetchContent_Declare(
         tree-sitter
         GIT_REPOSITORY https://github.com/tree-sitter/tree-sitter.git
-        GIT_TAG v0.25.1
+        GIT_TAG v0.24.7
         SOURCE_SUBDIR lib
 )
 FetchContent_MakeAvailable(tree-sitter)

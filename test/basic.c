@@ -1,4 +1,4 @@
 double __entry()
 {
-    return 0.421235;
+    return 3.1415;
 }
