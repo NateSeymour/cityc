@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.29)
-project(cityc)
+project(urban)
 
 set(CMAKE_CXX_STANDARD 23)
 
@@ -27,6 +27,6 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(tree-sitter-c)
 
-add_executable(cityc src/main.cpp)
-target_link_libraries(cityc PUBLIC city tree-sitter tree-sitter-c)
-target_include_directories(cityc PRIVATE ${tree-sitter_SOURCE_DIR}/lib/include)
+add_executable(urban src/main.cpp)
+target_link_libraries(urban PUBLIC city tree-sitter tree-sitter-c)
+target_include_directories(urban PRIVATE ${tree-sitter_SOURCE_DIR}/lib/include)

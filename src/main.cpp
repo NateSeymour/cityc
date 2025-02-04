@@ -52,6 +52,11 @@ class Compiler
             return ctx.builder.GetType<int>();
         }
 
+        if (raw_value == "void")
+        {
+            return ctx.builder.GetType<void>();
+        }
+
         throw std::runtime_error("unknown type name");
     }
 
@@ -71,8 +76,8 @@ class Compiler
 
     city::Value *ProcessBinaryExpression(CompilationContext &ctx, TSNode node)
     {
-        city::Value *lhs = this->ProcessValue(ctx, ts_node_child_by_field_name(node, "left", 4));
-        city::Value *rhs = this->ProcessValue(ctx, ts_node_child_by_field_name(node, "right", 5));
+        city::Value *lhs = this->ProcessExpression(ctx, ts_node_child_by_field_name(node, "left", 4));
+        city::Value *rhs = this->ProcessExpression(ctx, ts_node_child_by_field_name(node, "right", 5));
         auto op = this->GetNodeRawValue(ctx, ts_node_child_by_field_name(node, "operator", 8));
 
         if (op == "+")
@@ -90,7 +95,16 @@ class Compiler
         throw std::runtime_error("unrecognized operator");
     }
 
-    city::Value *ProcessValue(CompilationContext &ctx, TSNode node)
+    city::Value *ProcessCallExpression(CompilationContext &ctx, TSNode node)
+    {
+        TSNode function_name_node = ts_node_child_by_field_name(node, "function", 8);
+        auto function_name = std::string(this->GetNodeRawValue(ctx, function_name_node));
+
+        auto calltmp = ctx.builder.InsertCallInst(ctx.functions[function_name]);
+        return calltmp->GetReturnValue();
+    }
+
+    city::Value *ProcessExpression(CompilationContext &ctx, TSNode node)
     {
         if (std::strcmp(ts_node_type(node), "number_literal") == 0)
         {
@@ -102,7 +116,12 @@ class Compiler
             return this->ProcessBinaryExpression(ctx, node);
         }
 
-        throw std::runtime_error("unsupported value type");
+        if (std::strcmp(ts_node_type(node), "call_expression") == 0)
+        {
+            return this->ProcessCallExpression(ctx, node);
+        }
+
+        throw std::runtime_error("unsupported expression type");
     }
 
     void ProcessReturnStatement(CompilationContext &ctx, TSNode node)
@@ -113,8 +132,20 @@ class Compiler
         }
         else
         {
-            city::Value *return_value = this->ProcessValue(ctx, ts_node_named_child(node, 0));
+            city::Value *return_value = this->ProcessExpression(ctx, ts_node_named_child(node, 0));
             ctx.builder.InsertRetInst(return_value);
+        }
+    }
+
+    void ProcessDeclaration(CompilationContext &ctx, TSNode node)
+    {
+        auto type = this->ProcessPrimitiveType(ctx, ts_node_child_by_field_name(node, "type", 5));
+
+        // TODO: Create stack allocation
+
+        auto value_node = ts_node_child_by_field_name(node, "value", 5);
+        if (!ts_node_is_null(value_node))
+        {
         }
     }
 
@@ -126,6 +157,17 @@ class Compiler
             if (std::strcmp(ts_node_type(child), "return_statement") == 0)
             {
                 this->ProcessReturnStatement(ctx, child);
+            }
+            else if (std::strcmp(ts_node_type(child), "expression_statement") == 0)
+            {
+                if (ts_node_child_count(child) == 0)
+                    continue;
+
+                this->ProcessExpression(ctx, ts_node_child(child, 0));
+            }
+            else if (std::strcmp(ts_node_type(child), "declaration") == 0)
+            {
+                this->ProcessDeclaration(ctx, node);
             }
         }
     }
@@ -196,7 +238,7 @@ int main(int argc, char *argv[])
     // Open source file
     if (argc < 2)
     {
-        std::cerr << "Usage: cityc \"path/to/src.c\"" << std::endl;
+        std::cerr << "Usage: urban \"path/to/src1.c\" \"path/to/src2.c\"" << std::endl;
         return 1;
     }
 

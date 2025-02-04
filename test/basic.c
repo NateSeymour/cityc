@@ -1,4 +1,11 @@
+int constant()
+{
+    return 34;
+}
+
 int __entry()
 {
-    return 0 + 1 + 6 - 3;
+    int x = constant();
+
+    return x + 2;
 }
