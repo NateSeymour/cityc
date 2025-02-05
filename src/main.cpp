@@ -139,7 +139,7 @@ class Compiler
 
     void ProcessDeclaration(CompilationContext &ctx, TSNode node)
     {
-        auto type = this->ProcessPrimitiveType(ctx, ts_node_child_by_field_name(node, "type", 5));
+        auto type = this->ProcessPrimitiveType(ctx, ts_node_child_by_field_name(node, "type", 4));
 
         // TODO: Create stack allocation
 
@@ -167,7 +167,7 @@ class Compiler
             }
             else if (std::strcmp(ts_node_type(child), "declaration") == 0)
             {
-                this->ProcessDeclaration(ctx, node);
+                this->ProcessDeclaration(ctx, child);
             }
         }
     }
@@ -175,7 +175,7 @@ class Compiler
     void ProcessFunctionDefinition(CompilationContext &ctx, TSNode node)
     {
         // Type
-        auto return_type = this->ProcessPrimitiveType(ctx, ts_node_child_by_field_name(node, "type", 5));
+        auto return_type = this->ProcessPrimitiveType(ctx, ts_node_child_by_field_name(node, "type", 4));
 
         // Function name and parameters
         TSNode declarator_node = ts_node_child_by_field_name(node, "declarator", 10);
