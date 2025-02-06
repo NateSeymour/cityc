@@ -9,12 +9,47 @@
 
 extern "C" TSLanguage const *tree_sitter_c();
 
+class Scope
+{
+    std::vector<std::unordered_map<std::string, city::Value *>> variables_;
+
+public:
+    void PushLayer()
+    {
+        this->variables_.emplace_back();
+    }
+
+    void PopLayer()
+    {
+        this->variables_.pop_back();
+    }
+
+    [[nodiscard]] city::Value *Lookup(std::string const &name) const
+    {
+        for (int i = this->variables_.size() - 1; i >= 0; i--)
+        {
+            if (this->variables_[i].contains(name))
+            {
+                return this->variables_[i].at(name);
+            }
+        }
+
+        return nullptr;
+    }
+
+    void Set(std::string const &name, city::Value *value)
+    {
+        this->variables_.back()[name] = value;
+    }
+};
+
 struct CompilationContext
 {
     std::string_view source;
     city::IRBuilder &builder;
 
     std::unordered_map<std::string, city::IRFunction *> functions;
+    Scope scope;
 };
 
 class Compiler
@@ -44,17 +79,17 @@ class Compiler
 
         if (raw_value == "double")
         {
-            return ctx.builder.GetType<double>();
+            return city::Type::Get<double>();
         }
 
         if (raw_value == "int")
         {
-            return ctx.builder.GetType<int>();
+            return city::Type::Get<int>();
         }
 
         if (raw_value == "void")
         {
-            return ctx.builder.GetType<void>();
+            return city::Type::Get<void>();
         }
 
         throw std::runtime_error("unknown type name");
@@ -74,6 +109,21 @@ class Compiler
         }
     }
 
+    city::Value *ProcessVariable(CompilationContext &ctx, TSNode node)
+    {
+        auto raw_value = this->GetNodeRawValue(ctx, node);
+
+        auto value = ctx.scope.Lookup(std::string(raw_value));
+
+        if (!value)
+        {
+            throw std::runtime_error("undeclared identifier");
+        }
+
+        return value;
+    }
+
+
     city::Value *ProcessBinaryExpression(CompilationContext &ctx, TSNode node)
     {
         city::Value *lhs = this->ProcessExpression(ctx, ts_node_child_by_field_name(node, "left", 4));
@@ -82,14 +132,12 @@ class Compiler
 
         if (op == "+")
         {
-            auto addtmp = ctx.builder.InsertAddInst(lhs, rhs);
-            return addtmp->GetReturnValue();
+            return ctx.builder.InsertAddInst(lhs, rhs);
         }
 
         if (op == "-")
         {
-            auto subtmp = ctx.builder.InsertSubInst(lhs, rhs);
-            return subtmp->GetReturnValue();
+            return ctx.builder.InsertSubInst(lhs, rhs);
         }
 
         throw std::runtime_error("unrecognized operator");
@@ -100,8 +148,7 @@ class Compiler
         TSNode function_name_node = ts_node_child_by_field_name(node, "function", 8);
         auto function_name = std::string(this->GetNodeRawValue(ctx, function_name_node));
 
-        auto calltmp = ctx.builder.InsertCallInst(ctx.functions[function_name]);
-        return calltmp->GetReturnValue();
+        return ctx.builder.InsertCallInst(ctx.functions[function_name]);
     }
 
     city::Value *ProcessExpression(CompilationContext &ctx, TSNode node)
@@ -109,6 +156,11 @@ class Compiler
         if (std::strcmp(ts_node_type(node), "number_literal") == 0)
         {
             return this->ProcessNumberLiteral(ctx, node);
+        }
+
+        if (std::strcmp(ts_node_type(node), "identifier") == 0)
+        {
+            return this->ProcessVariable(ctx, node);
         }
 
         if (std::strcmp(ts_node_type(node), "binary_expression") == 0)
@@ -141,11 +193,19 @@ class Compiler
     {
         auto type = this->ProcessPrimitiveType(ctx, ts_node_child_by_field_name(node, "type", 4));
 
-        // TODO: Create stack allocation
-
-        auto value_node = ts_node_child_by_field_name(node, "value", 5);
-        if (!ts_node_is_null(value_node))
+        TSNode declarator_node = ts_node_child_by_field_name(node, "declarator", 10);
+        if (std::strcmp(ts_node_type(declarator_node), "identifier") == 0)
         {
+            // TODO: declaration without value
+        }
+        else if (std::strcmp(ts_node_type(declarator_node), "init_declarator") == 0)
+        {
+            TSNode identifier_node = ts_node_child_by_field_name(declarator_node, "declarator", 10);
+            auto variable_name = std::string(this->GetNodeRawValue(ctx, identifier_node));
+
+            auto value = this->ProcessExpression(ctx, ts_node_child_by_field_name(declarator_node, "value", 5));
+
+            ctx.scope.Set(variable_name, value);
         }
     }
 
@@ -174,6 +234,8 @@ class Compiler
 
     void ProcessFunctionDefinition(CompilationContext &ctx, TSNode node)
     {
+        ctx.scope.PushLayer();
+
         // Type
         auto return_type = this->ProcessPrimitiveType(ctx, ts_node_child_by_field_name(node, "type", 4));
 
@@ -189,10 +251,14 @@ class Compiler
 
         TSNode body = ts_node_child_by_field_name(node, "body", 4);
         this->ProcessCompoundStatement(ctx, body);
+
+        ctx.scope.PopLayer();
     }
 
     void ProcessTranslationUnit(CompilationContext &ctx, TSNode node)
     {
+        ctx.scope.PushLayer();
+
         for (int i = 0; i < ts_node_named_child_count(node); i++)
         {
             TSNode child = ts_node_named_child(node, i);
@@ -201,6 +267,8 @@ class Compiler
                 this->ProcessFunctionDefinition(ctx, child);
             }
         }
+
+        ctx.scope.PopLayer();
     }
 
 public:
