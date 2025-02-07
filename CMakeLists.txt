@@ -8,7 +8,7 @@ include(FetchContent)
 FetchContent_Declare(
         city
         GIT_REPOSITORY https://github.com/NateSeymour/city.git
-        GIT_TAG v0.1.1
+        GIT_TAG v0.1.6
 )
 FetchContent_MakeAvailable(city)
 
