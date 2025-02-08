@@ -1,30 +1,17 @@
-int constant()
+int add(int a, int b)
 {
-    return 34;
-}
-
-void other_routine()
-{
-    //int x = 34 + 2;
-    return;
+    return a + b;
 }
 
 int __entry()
 {
-    int a = 1;
-    int b = 2;
-    int c = 3;
-    int d = 4;
-    int e = 5;
-    int f = 6;
+    int x = 5;
+    int y = 10;
 
-    constant();
+    int subtotal = add(x, y);
 
-    int subtotal = a + b - c;
+    int z = 4;
+    int a = subtotal + x + y + z;
 
-    other_routine();
-
-    int total = subtotal + d - e + f;
-
-    return total;
+    return add(add(a, a), 43 - 2);
 }

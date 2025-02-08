@@ -145,10 +145,22 @@ class Compiler
 
     city::Value *ProcessCallExpression(CompilationContext &ctx, TSNode node)
     {
+        // Get function name
         TSNode function_name_node = ts_node_child_by_field_name(node, "function", 8);
         auto function_name = std::string(this->GetNodeRawValue(ctx, function_name_node));
 
-        return ctx.builder.InsertCallInst(ctx.functions[function_name]);
+        // Get arguments
+        TSNode argument_list_node = ts_node_child_by_field_name(node, "arguments", 9);
+        std::vector<city::Value *> args;
+        if(!ts_node_is_null(argument_list_node))
+        {
+            for(int i = 0; i < ts_node_named_child_count(argument_list_node); i++)
+            {
+                args.push_back(this->ProcessExpression(ctx, ts_node_named_child(argument_list_node, i)));
+            }
+        }
+
+        return ctx.builder.InsertCallInst(ctx.functions[function_name], args);
     }
 
     city::Value *ProcessExpression(CompilationContext &ctx, TSNode node)
@@ -244,11 +256,34 @@ class Compiler
         TSNode name_node = ts_node_child_by_field_name(declarator_node, "declarator", 10);
         auto function_name = std::string(this->GetNodeRawValue(ctx, name_node));
 
-        // TODO: parse parameters
+        std::vector<std::string> arg_names;
+        std::vector<city::Type> arg_types;
+        TSNode parameter_list_node = ts_node_child_by_field_name(declarator_node, "parameters", 10);
+        if (!ts_node_is_null(parameter_list_node))
+        {
+            for (int i = 0; i < ts_node_named_child_count(parameter_list_node); i++)
+            {
+                TSNode parameter_node = ts_node_named_child(parameter_list_node, i);
+                TSNode parameter_name_node = ts_node_child_by_field_name(parameter_node, "declarator", 10);
+                TSNode parameter_type_node = ts_node_child_by_field_name(parameter_node, "type", 4);
 
-        auto function = ctx.builder.CreateFunction(function_name, return_type);
+                arg_names.emplace_back(this->GetNodeRawValue(ctx, parameter_name_node));
+                arg_types.push_back(this->ProcessPrimitiveType(ctx, parameter_type_node));
+            }
+        }
+
+        // Create function
+        auto function = ctx.builder.CreateFunction(function_name, return_type, arg_types);
         ctx.functions[function_name] = function;
 
+        // Push parameter values into scope
+        auto &args = function->GetArgs();
+        for (int i = 0; i < arg_names.size(); i++)
+        {
+            ctx.scope.Set(arg_names[i], args[i]);
+        }
+
+        // Parse function body
         TSNode body = ts_node_child_by_field_name(node, "body", 4);
         this->ProcessCompoundStatement(ctx, body);
 
